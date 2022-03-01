@@ -1,0 +1,22 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+flask = "*"
+werkzeug = "*"
+boto3 = "*"
+flask-restx = "*"
+serverless-wsgi = "*"
+pynamodb = "*"
+
+[dev-packages]
+pytest = "*"
+moto = "*"
+pytest-dotenv = "*"
+py-event-mocks = "*"
+pytest-cov = "*"
+
+[requires]
+python_version = "3.8"
