@@ -1,22 +1,14 @@
-from pynamodb.attributes import UnicodeAttribute, NumberAttribute, ListAttribute
+from uuid import uuid4
+
+from sqlalchemy_utils import UUIDType
 
 from app_context import db
+from common.constants import DateStatusEnum
 
 
-class ProductLookup(db.Model):
-    class Meta:
-        table_name = "product_lookup"
-        region = "us-west-2"
+class Date(db.Model):
+    __tablename__ = 'date'
 
-    name = UnicodeAttribute(hash_key=True)
-    quantity = NumberAttribute(default_for_new=0)
-
-
-class Order(db.Model):
-    class Meta:
-        table_name = "order"
-        region = "us-west-2"
-
-    order_uuid = UnicodeAttribute(hash_key=True)
-    items = ListAttribute()
-    status = UnicodeAttribute(default_for_new='PENDING')
+    uuid = db.Column(UUIDType(binary=False), default=uuid4, primary_key=True)
+    date = db.Column(db.Date, unique=True, nullable=False)
+    status = db.Column(db.Integer, default=DateStatusEnum.PENDING.value, nullable=False)

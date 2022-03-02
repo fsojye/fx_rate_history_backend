@@ -1,70 +1,36 @@
-import os
+from datetime import date
 
 import pytest
-from moto import mock_dynamodb2, mock_sqs
 
 from app import app, db
-from common.middlewares import aws_client
-from models import ProductLookup, Order
+from common.constants import DateStatusEnum
+from models import Date
+
 
 @pytest.fixture(scope='function')
 def test_client():
     with app.test_client() as client:
         with app.app_context():
             with app.test_request_context('/'):
-                with mock_dynamodb2():
-                    yield client
-                    # clean up
-                    db.destroy_all()
+                db.create_all()
+                yield client
+                db.drop_all()
+
 
 @pytest.fixture(scope='function')
-def generate_sqs():
-    with mock_sqs():
-        aws = aws_client('sqs')
-        response = aws.create_queue(QueueName=os.environ['ORDER_QUEUE'])
-        os.environ['ORDER_QUEUE_URL'] = response['QueueUrl']
-
-@pytest.fixture(scope='function')
-def generate_menu_data():
-    with mock_dynamodb2():
-        # setup
-        ProductLookup.create_table()
-
-        with ProductLookup.batch_write() as batch:
-            for item in FAKE_MENU:
-                batch.save(ProductLookup(
-                    item['name'],
-                    quantity=item.get('quantity', 0)
-                ))
-
-@pytest.fixture(scope='function')
-def create_order_table():
-    with mock_dynamodb2():
-        # setup
-        Order.create_table()
-
-@pytest.fixture(scope='function')
-def generate_order_data():
-    with mock_dynamodb2():
-        Order.create_table()
-        with Order.batch_write() as batch:
-            for item in FAKE_ORDERS:
-                batch.save(Order(
-                    item['order_uuid'],
-                    items=item['items'],
-                    status=item.get('status', 'PENDING')
-                ))
+def generate_date_data():
+    load_to_schema(Date, DATE_DATA)
 
 
-FAKE_MENU = [
-    {"name": "Pork chop", "quantity": 10},
-    {"name": "Rice", "quantity": 10},
-    {"name": "Chopsuey"},
-    {"name": "Water", "quantity": -1}
-]
+def load_to_schema(table, data):
+    for item in data:
+        db.session.add(table(**item))
 
-FAKE_ORDERS = [
-    dict(order_uuid='abcd1234', items=[{"name": "Water", "quantity": 2}], status='PENDING'),
-    dict(order_uuid='123415', items=[{"name": "xxx", "quantity": 2}], status='COMPLETED'),
-    dict(order_uuid='abcd123415', items=[{"name": "YYY", "quantity": 11}], status='PENDING')
+
+DATE_DATA = [
+    dict(uuid="f54d7eb6-5fe7-4541-bb7d-8183e7ac06dc", date=date(2021, 12, 1), status=DateStatusEnum.SUCCESS.value),
+    dict(uuid="9517e802-90db-4f9c-be10-a6a6ad2930f6", date=date(2021, 12, 31), status=DateStatusEnum.SUCCESS.value),
+    dict(uuid="3ca2ff4c-5d92-41e8-98da-fc398b8d5a0c", date=date(2022, 1, 1), status=DateStatusEnum.SUCCESS.value),
+    dict(uuid="be44af80-ea3d-40b1-b6fb-74a028761083", date=date(2022, 2, 1), status=DateStatusEnum.PENDING.value),
+    dict(uuid="7b015c59-1697-4ebf-8da6-6847ac8444b8", date=date(2022, 1, 31), status=DateStatusEnum.SUCCESS.value)
 ]

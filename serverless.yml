@@ -1,6 +1,6 @@
-org: josfyorobe
-app: serverless-flask-tdd
-service: order-taker-app
+org: josfy
+app: fx-rate-history
+service: fx-rate-history-backend
 
 provider:
   name: aws
@@ -10,26 +10,10 @@ provider:
   timeout: 30
   environment:
     PYTHONPATH: "/opt/python:/opt/python/lib/${self:provider.runtime}/site-packages:src"
-    ORDER_QUEUE_URL: { Ref: orderQueue}
-  iam:
-    role:
-      statements:
-        - Effect: 'Allow'
-          Action:
-            - 'dynamodb:Scan'
-          Resource: 'arn:aws:dynamodb:*:*:table/product_lookup'
-        - Effect: 'Allow'
-          Action:
-            - 'sqs:SendMessage'
-          Resource: 'arn:aws:sqs:*:*:order_queue'
-        - Effect: 'Allow'
-          Action:
-            - 'dynamodb:PutItem'
-            - 'dynamodb:DescribeTable'
-            - 'dynamodb:Query'
-          Resource: 'arn:aws:dynamodb:*:*:table/order'
 
 custom:
+  dotenv:
+    path: .env
   pythonRequirements:
     layer: true
     slim: false
@@ -38,8 +22,10 @@ custom:
     app: src.app.app
 
 plugins:
+  - serverless-dotenv-plugin
   - serverless-python-requirements
   - serverless-wsgi
+  - serverless-offline
 
 package:
   individually: false
@@ -51,52 +37,10 @@ package:
     - 'src/**'
 
 functions:
-  appApis:
-    handler: src.wsgi.handler
+  dataCollector:
+    handler: src.lambda_handler.data_collector_handler
     layers:
       - { Ref: PythonRequirementsLambdaLayer }
     events:
-      - http: GET /menu
-      - http: POST /order
-      - http: GET /order/{order_uuid}
-  orderProcessor:
-    handler: src.wsgi.order_processor_handler
-    layers:
-      - { Ref: PythonRequirementsLambdaLayer }
-    events:
-      - sqs:
-          arn: { Fn::GetAtt: [orderQueue, Arn] }
-
-resources:
-  Resources:
-    productLookupTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: product_lookup
-        AttributeDefinitions:
-          - AttributeName: name
-            AttributeType: S
-        KeySchema:
-          - AttributeName: name
-            KeyType: HASH
-        ProvisionedThroughput:
-          ReadCapacityUnits: 1
-          WriteCapacityUnits: 1
-    orderTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: order
-        AttributeDefinitions:
-          - AttributeName: order_uuid
-            AttributeType: S
-        KeySchema:
-          - AttributeName: order_uuid
-            KeyType: HASH
-        ProvisionedThroughput:
-          ReadCapacityUnits: 1
-          WriteCapacityUnits: 1
-    orderQueue:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: order_queue
+      - schedule: rate(1 minute)
 

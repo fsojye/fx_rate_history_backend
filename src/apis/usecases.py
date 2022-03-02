@@ -1,126 +1,76 @@
-import json
+import calendar
 import os
-from typing import Dict, List
-from uuid import uuid4
+from datetime import date, datetime, timedelta
 
-from flask import abort
+import requests
 
-from common.middlewares import aws_client
-from custom_exceptions import InvalidOrderException, InvalidMessageException
-from models import ProductLookup, Order
+from apis.custom_exceptions import (InvalidDataException,
+                                    UnavailableDataException)
+from apis.entities import CurrencyEntity, DateEntity, RateEntity
+from common.logger import logging
 
 
-def get_menu() -> List:
-    """Scans table for all items and available quantity.
+def fetch_and_store_data():
+    """Main interactor method for fetching data from third party API and storing fetched data to database.
 
-    Returns:
-        list: products and its quantity.
+    Lookup the last date element;
+    Send request to API for next date data;
+    Validates and insert data to database;
     """
 
-    return _get_products_from_db()
-
-def post_order(payload: List) -> Dict:
-    """Validates order and send to queue.
-
-    Args:
-        payload (list): post request payload
-
-    Returns:
-        dict: returns order_uuid and order details
-
-    Raises:
-        werkzeug.exceptions.BadRequest: If `payload` is invalid
-    """
-
-    try:
-        _validate_order(payload)
-        order_message = _build_order_message(payload)
-        _push_order_to_sqs(order_message)
-        return order_message
-    except InvalidOrderException:
-        abort(400)
-
-def process_order(sqs_event: Dict):
-    """Retrieves order from queue and insert into the database.
-
-    Args:
-        sqs_event (dict): AWS Lambda event object from sqs
-    """
-
-    order = _parse_order_from_sqs_event(sqs_event)
-    _validate_order(order['items'])
-    _insert_order_to_db(order)
-
-def get_order(order_uuid: str) -> Dict:
-    """Query database for matching `order_uuid`
-
-    Args:
-        order_uuid (str): order_uuid of the order generated during processing.
-
-    Returns:
-        dict: order_uuid, items, and status of order
-
-    Raises:
-        werkzeug.exceptions.NotFound: If `order_uuid` does not exist in the database.
-    """
-
-    return _get_order_from_db(order_uuid)
-
-def _get_products_from_db() -> List:
-    return [product.attribute_values for product in ProductLookup.scan()]
-
-def _validate_order(order: List) -> None:
-    if not _is_valid_order(order):
-        raise InvalidOrderException()
-
-def _is_valid_order(order: List) -> bool:
-    menu = get_menu()
-    menu = {item['name'].lower():item['quantity'] for item in menu}
-    try:
-        if not order:
-            return False
-        for item in order:
-            if item['name'].lower() not in menu.keys():
-                return False
-            if not isinstance(item['quantity'], int):
-                return False
-            if item['quantity'] < 1:
-                return False
-            if item['quantity'] > menu[item['name'].lower()] and menu[item['name'].lower()] != -1:
-                return False
-    except KeyError:
-        return False
-    except TypeError:
-        return False
-    return True
-
-def _build_order_message(order: List) -> Dict:
-    return dict(order_uuid=str(uuid4()), items=order)
-
-def _push_order_to_sqs(order_message: Dict):
-    client = aws_client('sqs')
-    client.send_message(
-        QueueUrl=os.environ['ORDER_QUEUE_URL'],
-        MessageBody=json.dumps(order_message)
+    logging.info('Starting data collection')
+    next_date = _get_next_date(_get_last_date_from_db())
+    logging.debug(next_date)
+    next_date = '2022-03-02'
+    data = _fetch_data_from_provider(
+        f"{os.environ['DATASOURCE_HOST']}/v1/{str(next_date)}?access_key={os.environ['DATASOURCE_API_KEY']}&format=1"
     )
+    logging.debug(data)
+    _validate_data(data)
+    _insert_data_to_db(data)
+    logging.info('End of data collection')
 
-def _parse_order_from_sqs_event(sqs_event: Dict) -> Dict:
+
+def _get_last_date_from_db() -> date:
+    return DateEntity.query_last().date
+
+
+def _get_next_date(current_date: date) -> date:
+    # seed date is 1999-01-01
+    if current_date is None:
+        return date(1999, 1, 1)
+
+    now = datetime.utcnow()
+    last_day_of_current_dt_month = calendar.monthrange(current_date.year, current_date.month)[1]
+    if current_date.day < last_day_of_current_dt_month:
+        next_date = date(current_date.year, current_date.month, last_day_of_current_dt_month)
+    elif current_date.day == last_day_of_current_dt_month:
+        next_date = current_date + timedelta(days=1)
+    if next_date >= date(now.year, now.month, now.day):
+        raise UnavailableDataException
+    return next_date
+
+
+def _fetch_data_from_provider(url: str) -> dict:
+    return requests.get(url).json()
+
+
+def _validate_data(data: dict) -> None:
     try:
-        message = sqs_event['Records'][0]['body']
-        if message:
-            return json.loads(message)
-        raise InvalidMessageException
-    except (KeyError, TypeError, json.JSONDecodeError) as e:
-        raise InvalidMessageException(e)
+        ts_dt = datetime.utcfromtimestamp(data['timestamp'])
+        if False in [
+            data['success'],
+            'base' in data,
+            str(ts_dt.date()) == data['date']
+        ]:
+            raise InvalidDataException
+    except (TypeError, KeyError) as e:
+        raise InvalidDataException(e)
 
-def _insert_order_to_db(order: Dict):
-    Order(order['order_uuid'], items=order['items']).save()
 
-def _get_order_from_db(order_uuid: str) -> Dict:
-    try:
-        for order in Order.query(order_uuid):
-            return order.attribute_values
-        else:
-            abort(404)
-    except ValueError:
-        abort(404)
+def _insert_data_to_db(data: dict) -> list:
+    _date = DateEntity(date=data['date'])
+    for k, v in data['rates'].items():
+        ccy = CurrencyEntity(code=k)
+        rate = RateEntity(date=_date, currency=ccy, amount=v, epoch=data['timestamp'], base_ccy=data['base'])
+        rate.insert()
