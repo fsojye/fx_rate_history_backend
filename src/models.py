@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from sqlalchemy_utils import UUIDType
 
-from app import db
+from app_context import db
 from common.constants import DateStatusEnum
 
 
@@ -12,7 +12,6 @@ class Date(db.Model):
     uuid = db.Column(UUIDType(binary=False), default=uuid4, primary_key=True)
     date = db.Column(db.Date, unique=True, nullable=False)
     status = db.Column(db.Integer, default=DateStatusEnum.PENDING.value, nullable=False)
-    # rates = db.relationship("Rate", backref="rate")
 
 
 class Currency(db.Model):
@@ -20,7 +19,6 @@ class Currency(db.Model):
 
     uuid = db.Column(UUIDType(binary=False), default=uuid4, primary_key=True)
     code = db.Column(db.String(32), unique=True, nullable=False)
-    # rates = db.relationship("Rate", backref="rate")
 
 
 class DateCurrencyRate(db.Model):
