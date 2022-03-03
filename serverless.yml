@@ -42,5 +42,5 @@ functions:
     layers:
       - { Ref: PythonRequirementsLambdaLayer }
     events:
-      - schedule: rate(1 minute)
+      - schedule: rate(1 hour)
 
