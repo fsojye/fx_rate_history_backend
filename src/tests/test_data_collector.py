@@ -1,13 +1,16 @@
-from datetime import date, datetime
+from datetime import date
 from unittest import mock
 
 import pytest
 
-from apis.custom_exceptions import (InvalidDataException,
+from apis.custom_exceptions import (DataRequestException, InvalidDataException,
                                     UnavailableDataException)
 from apis.usecases import (_fetch_data_from_provider, _get_last_date_from_db,
-                           _get_next_date, _insert_data_to_db, _validate_data,
-                           fetch_and_store_data)
+                           _get_next_date, _insert_data_to_db,
+                           _insert_date_to_db, _update_date_status_in_db,
+                           _validate_data, fetch_and_store_data)
+from common.constants import DateStatusEnum
+from models import Currency, Date, DateCurrencyRate
 
 
 @pytest.mark.usefixtures('generate_date_data')
@@ -46,17 +49,32 @@ def test_get_next_data_given_date_in_future_should_raise_expected_exception(date
         _get_next_date(date_parameter)
 
 
+@pytest.mark.parametrize('next_date', [
+    date(2021, 1, 1), date(2021, 1, 2), date(2021, 1, 2)
+])
+def test_insert_date_to_db_should_create_object_and_generate_uuid(next_date):
+    actual = _insert_date_to_db(next_date)
+    assert actual.loaded_object.uuid is not None
+    assert actual.loaded_object.status == DateStatusEnum.PENDING.value
+
+
 @mock.patch('apis.usecases.requests.get')
 def test_fetch_data_from_provider_should_send_request_to_endpoint(mock_requests):
     _fetch_data_from_provider('http://localhost:8080')
     mock_requests.assert_called()
 
 
+@mock.patch('apis.usecases.requests.get', side_effect=ValueError)
+def test_fetch_data_from_provider_given_exception_encountered_should_raise_data_request_exception(mock_requests):
+    with pytest.raises(DataRequestException):
+        _fetch_data_from_provider('http://localhost:8080')
+
+
 @pytest.mark.parametrize('data', [
     dict(success=True, timestamp=915235199, base='EUR', date="1999-01-01", rates=dict(JPY=133.151679, USD=1.171626, TWD=37.801368)),
     dict(success=True, timestamp=1646206622, base='EUR', date="2022-03-02", rates=dict(JPY=127.855595, USD=1.110605, TWD=31.150127, PHP=57.122291))
 ])
-def test_validate_data_given_valid_data_should_pass(data):
+def test_validate_data_given_valid_data_should_return_none(data):
     actual = _validate_data(data)
     assert actual is None
 
@@ -75,77 +93,125 @@ def test_validate_data_given_invalid_data_should_raise_expected_exception(data):
         _validate_data(data)
 
 
-# @mock.patch('apis.usecases.RateEntity.insert')
-# @pytest.mark.parametrize('data', [
-#     dict(success=True, timestamp=915235199, base='EUR', date="1999-01-01", rates=dict(JPY=133.151679, USD=1.171626, TWD=37.801368)),
-#     dict(success=True, timestamp=1646206622, base='EUR', date="2022-03-02", rates=dict(JPY=127.855595, USD=1.110605, TWD=31.150127, PHP=57.122291))
-# ])
-# def test_insert_data_to_db_should_trigger_entity_insert_method(mock_insert, data):
-#     _insert_data_to_db(data)
-#     mock_insert.assert_called()
+@mock.patch('apis.usecases.DateEntity')
+def test_update_date_status_in_db_should_trigger_data_entity_update_method(mock_date_entity):
+    _update_date_status_in_db(mock_date_entity, 0)
+    mock_date_entity.update.assert_called()
 
 
-# @mock.patch('apis.usecases._get_next_date')
-# @mock.patch('apis.usecases._fetch_data_from_provider')
-# @mock.patch('apis.usecases._validate_data')
-# @mock.patch('apis.usecases._insert_data_to_db')
-# def test_fetch_and_store_data_should_trigger_expected_methods(mock_insert_data_to_db, mock_validate_data, mock_fetch_data_from_provider, mock_get_next_date):
-#     fetch_and_store_data()
-#     if mock_get_next_date.assert_called():
-#         if mock_fetch_data_from_provider.assert_called():
-#             if mock_validate_data.assert_called():
-#                 mock_insert_data_to_db.assert_called()
+@mock.patch('apis.usecases.DateEntity')
+@mock.patch('apis.usecases.CurrencyEntity')
+@mock.patch('apis.usecases.DateCurrencyRateEntity.insert')
+def test_insert_data_in_db_should_trigger_rate_entity_insert_method_multiple_times(
+    mock_date_currency_rate_entity, mock_currency_entity, mock_date_entity
+):
+    _insert_data_to_db(data=TEST_DATA, date_entity=mock_date_entity)
+    expected = len(TEST_DATA['rates'])
+    actual = len(mock_date_currency_rate_entity.mock_calls)
+    assert expected == actual
 
-# mock_get_next_date.assert_called()
-# mock_fetch_data_from_provider.assert_called()
-# mock_validate_data.assert_called()
-# _insert_data_to_db.assert_called()
 
-# @pytest.mark.parametrize('data', [
-#     dict(success=True, timestamp=915235199, base='EUR', date="1999-01-01", rates=dict(JPY=133.151679, USD=1.171626, TWD=37.801368)),
-#     dict(success=True, timestamp=1646206622, base='EUR', date="2022-03-02", rates=dict(JPY=127.855595, USD=1.110605, TWD=31.150127, PHP=57.122291))
-# ])
-# def test_feature_fetch_and_store_data_should_idk(data):
-#     actual = fetch_store_data()
+@mock.patch('apis.usecases._get_last_date_from_db')
+@mock.patch('apis.usecases._get_next_date')
+@mock.patch('apis.usecases._insert_date_to_db')
+@mock.patch('apis.usecases._fetch_data_from_provider')
+@mock.patch('apis.usecases._validate_data')
+@mock.patch('apis.usecases._insert_data_to_db')
+@mock.patch('apis.usecases._update_date_status_in_db')
+def test_fetch_and_store_data_given_no_encountered_exception_should_trigger_expected_methods(
+    mock_update_date_status_in_db, mock_insert_data_to_db, mock_validate_data, mock_fetch_data_from_provider, mock_insert_date_to_db, mock_get_next_date, mock_get_last_date_from_db
+):
+    fetch_and_store_data()
+    if mock_get_last_date_from_db.assert_called():
+        if mock_get_next_date.assert_called():
+            if mock_insert_date_to_db.assert_called():
+                if mock_fetch_data_from_provider.assert_called():
+                    if mock_validate_data.assert_called():
+                        if mock_insert_data_to_db.assert_called():
+                            mock_update_date_status_in_db.assert_called()
 
-# return_value={
-#     "success": True,
-#     "timestamp": 915235199,
-#     "historical": True,
-#     "base": "EUR",
-#     "date": "1999-01-01",
-#     "rates": {
-#         "ANG": 2.086282,
-#         "AUD": 1.918776,
-#         "AWG": 2.086282,
-#         "BBD": 2.343251,
-#         "BMD": 1.171626,
-#         "BRL": 1.412372,
-#         "BSD": 1.171626,
-#         "CAD": 1.805443,
-#         "CHF": 1.611044,
-#         "CNY": 9.689343,
-#         "DKK": 7.471248,
-#         "EUR": 1,
-#         "FKP": 0.707213,
-#         "GBP": 0.706421,
-#         "HKD": 9.104122,
-#         "INR": 49.836962,
-#         "JPY": 133.151679,
-#         "KPW": 1054.463015,
-#         "KRW": 1416.618059,
-#         "MXN": 11.599099,
-#         "MYR": 4.445915,
-#         "NOK": 8.905698,
-#         "NZD": 2.194333,
-#         "PAB": 1.171626,
-#         "SAR": 4.394498,
-#         "SEK": 9.511108,
-#         "SGD": 1.939455,
-#         "SHP": 0.707213,
-#         "THB": 42.848374,
-#         "TWD": 37.801368,
-#         "USD": 1.171626,
-#         "ZAR": 6.901355
-#     }
-# })
+
+@mock.patch('apis.usecases._get_last_date_from_db')
+@mock.patch('apis.usecases._get_next_date', side_effect=UnavailableDataException)
+@mock.patch('apis.usecases._insert_date_to_db')
+@mock.patch('apis.usecases._fetch_data_from_provider')
+@mock.patch('apis.usecases._validate_data')
+@mock.patch('apis.usecases._insert_data_to_db')
+@mock.patch('apis.usecases._update_date_status_in_db')
+def test_fetch_and_store_data_given_get_next_date_raised_unavailable_data_exception_should_return_none(
+    mock_update_date_status_in_db, mock_insert_data_to_db, mock_validate_data, mock_fetch_data_from_provider, mock_insert_date_to_db, mock_get_next_date, mock_get_last_date_from_db
+):
+    assert fetch_and_store_data() is None
+
+
+@mock.patch('apis.usecases._get_last_date_from_db')
+@mock.patch('apis.usecases._get_next_date')
+@mock.patch('apis.usecases._insert_date_to_db')
+@mock.patch('apis.usecases._fetch_data_from_provider', side_effect=DataRequestException)
+@mock.patch('apis.usecases._validate_data')
+@mock.patch('apis.usecases._insert_data_to_db')
+@mock.patch('apis.usecases._update_date_status_in_db')
+def test_fetch_and_store_data_given_fetch_data_from_provider_raised_data_request_exception_should_trigger_update_date_and_return_none(
+    mock_update_date_status_in_db, mock_insert_data_to_db, mock_validate_data, mock_fetch_data_from_provider, mock_insert_date_to_db, mock_get_next_date, mock_get_last_date_from_db
+):
+    actual = fetch_and_store_data()
+    mock_update_date_status_in_db.assert_called()
+    assert actual is None
+
+
+@mock.patch('apis.usecases._get_last_date_from_db')
+@mock.patch('apis.usecases._get_next_date')
+@mock.patch('apis.usecases._insert_date_to_db')
+@mock.patch('apis.usecases._fetch_data_from_provider')
+@mock.patch('apis.usecases._validate_data', side_effect=InvalidDataException)
+@mock.patch('apis.usecases._insert_data_to_db')
+@mock.patch('apis.usecases._update_date_status_in_db')
+def test_fetch_and_store_data_given_validate_data_raised_invalid_data_exception_should_trigger_update_date_and_return_none(
+    mock_update_date_status_in_db, mock_insert_data_to_db, mock_validate_data, mock_fetch_data_from_provider, mock_insert_date_to_db, mock_get_next_date, mock_get_last_date_from_db
+):
+    actual = fetch_and_store_data()
+    mock_update_date_status_in_db.assert_called()
+    assert actual is None
+
+
+TEST_DATA = {
+    "success": True,
+    "timestamp": 1646220302,
+    "historical": True,
+    "base": "EUR",
+    "date": "2022-03-02",
+    "rates": {
+        "AUD": 1.527742,
+        "BTC": 2.520886e-5,
+        "EUR": 1,
+        "JPY": 127.916538,
+        "PHP": 57.229981,
+        "TWD": 31.113244,
+        "USD": 1.109915,
+    }
+}
+
+
+@pytest.mark.usefixtures('generate_currency_data')
+@mock.patch('apis.usecases._get_last_date_from_db')
+@mock.patch('apis.usecases._get_next_date', return_value=date(2022, 3, 2))
+@mock.patch('apis.usecases._fetch_data_from_provider', return_value=TEST_DATA)
+def test_fetch_and_store_data_functional(mock_fetch_data_from_provider, mock_get_next_date, mock_get_last_date_from_db):
+    before = Date.query.count(), Currency.query.count(), DateCurrencyRate.query.count()
+    fetch_and_store_data()
+    after = Date.query.count(), Currency.query.count(), DateCurrencyRate.query.count()
+    assert before == (0, 6, 0)
+    assert after == (1, 7, 7)
+    assert DateStatusEnum(Date.query.one().status).name == "SUCCESS"
+
+
+@mock.patch('apis.usecases._get_last_date_from_db')
+@mock.patch('apis.usecases._get_next_date', return_value=date(2022, 3, 2))
+@mock.patch('apis.usecases._fetch_data_from_provider', side_effect=DataRequestException)
+def test_fetch_and_store_data_functional_should_add_date_then_set_to_failed(mock_fetch_data_from_provider, mock_get_next_date, mock_get_last_date_from_db):
+    before = Date.query.count(), Currency.query.count(), DateCurrencyRate.query.count()
+    fetch_and_store_data()
+    after = Date.query.count(), Currency.query.count(), DateCurrencyRate.query.count()
+    assert before == (0, 0, 0)
+    assert after == (1, 0, 0)
+    assert DateStatusEnum(Date.query.one().status).name == "FAILED"

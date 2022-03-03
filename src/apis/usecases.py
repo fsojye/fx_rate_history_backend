@@ -4,9 +4,10 @@ from datetime import date, datetime, timedelta
 
 import requests
 
-from apis.custom_exceptions import (InvalidDataException,
+from apis.custom_exceptions import (DataRequestException, InvalidDataException,
                                     UnavailableDataException)
-from apis.entities import CurrencyEntity, DateEntity, RateEntity
+from apis.entities import CurrencyEntity, DateCurrencyRateEntity, DateEntity
+from common.constants import DateStatusEnum
 from common.logger import logging
 
 
@@ -14,20 +15,32 @@ def fetch_and_store_data():
     """Main interactor method for fetching data from third party API and storing fetched data to database.
 
     Lookup the last date element;
+    Create date object with status = PENDING;
     Send request to API for next date data;
     Validates and insert data to database;
+    Update date object with status = SUCCESS or FAILED
     """
 
     logging.info('Starting data collection')
-    next_date = _get_next_date(_get_last_date_from_db())
-    logging.debug(next_date)
-    next_date = '2022-03-02'
-    data = _fetch_data_from_provider(
-        f"{os.environ['DATASOURCE_HOST']}/v1/{str(next_date)}?access_key={os.environ['DATASOURCE_API_KEY']}&format=1"
-    )
-    logging.debug(data)
-    _validate_data(data)
-    _insert_data_to_db(data)
+    try:
+        next_date = _get_next_date(_get_last_date_from_db())
+        logging.info(next_date)
+        date_entity = _insert_date_to_db(next_date)
+        data = _fetch_data_from_provider(
+            f"{os.environ['DATASOURCE_HOST']}/v1/{str(next_date)}?access_key={os.environ['DATASOURCE_API_KEY']}&format=1"
+        )
+        logging.debug(data)
+        _validate_data(data)
+
+        _insert_data_to_db(data, date_entity)
+        _update_date_status_in_db(date_entity, DateStatusEnum.SUCCESS.value)
+        logging.info('Data collection success')
+    except (InvalidDataException, DataRequestException):
+        _update_date_status_in_db(date_entity, DateStatusEnum.FAILED.value)
+        logging.info('Data collection failed')
+    except UnavailableDataException:
+        logging.info('Data is still unavailable; do nothing for now')
+
     logging.info('End of data collection')
 
 
@@ -51,8 +64,17 @@ def _get_next_date(current_date: date) -> date:
     return next_date
 
 
+def _insert_date_to_db(next_date: date) -> DateEntity:
+    _date = DateEntity(date=next_date)
+    _date.insert()
+    return _date
+
+
 def _fetch_data_from_provider(url: str) -> dict:
-    return requests.get(url).json()
+    try:
+        return requests.get(url).json()
+    except Exception as e:
+        raise DataRequestException(e)
 
 
 def _validate_data(data: dict) -> None:
@@ -68,9 +90,13 @@ def _validate_data(data: dict) -> None:
         raise InvalidDataException(e)
 
 
-def _insert_data_to_db(data: dict) -> list:
-    _date = DateEntity(date=data['date'])
+def _insert_data_to_db(data: dict, date_entity: DateEntity):
     for k, v in data['rates'].items():
-        ccy = CurrencyEntity(code=k)
-        rate = RateEntity(date=_date, currency=ccy, amount=v, epoch=data['timestamp'], base_ccy=data['base'])
-        rate.insert()
+        currency_entity = CurrencyEntity(code=k)
+        date_currency_rate_entity = DateCurrencyRateEntity(
+            date=date_entity, currency=currency_entity, amount=v, epoch=data['timestamp'], base_ccy=data['base'])
+        date_currency_rate_entity.insert()
+
+
+def _update_date_status_in_db(date_ent: DateEntity, status: DateStatusEnum):
+    date_ent.update(key='status', value=status)

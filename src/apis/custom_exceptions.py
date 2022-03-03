@@ -4,3 +4,7 @@ class InvalidDataException(Exception):
 
 class UnavailableDataException(Exception):
     pass
+
+
+class DataRequestException(Exception):
+    pass
