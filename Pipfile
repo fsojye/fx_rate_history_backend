@@ -4,26 +4,28 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-flask = "*"
-werkzeug = "*"
+aws-psycopg2 = "*"
 boto3 = "*"
+flask = "*"
 flask-restx = "*"
-serverless-wsgi = "*"
 flask-sqlalchemy = "*"
 requests = "*"
+sqlalchemy = "*"
 sqlalchemy-utils = "*"
+serverless-wsgi = "*"
+werkzeug = "*"
 
 [dev-packages]
-pipenv = "*"
 autopep8 = "*"
+isort = "*"
 flake8 = "*"
 flake8-awesome = "*"
-pylint = "*"
-isort = "*"
-pytest = "*"
-pytest-dotenv = "*"
+pipenv = "*"
 py-event-mocks = "*"
+pylint = "*"
+pytest = "*"
 pytest-cov = "*"
+pytest-dotenv = "*"
 pytest-freezegun = "*"
 
 [requires]
