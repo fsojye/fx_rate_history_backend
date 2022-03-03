@@ -5,11 +5,22 @@ service: fx-rate-history-backend
 provider:
   name: aws
   region: us-west-2
+  vpc:
+    securityGroupIds:
+      - ${param:SECURITY_GROUP_ID}
+    subnetIds:
+      - ${param:SUBNET_A_ID}
+      - ${param:SUBNET_B_ID}
   stage: dev
   runtime: python3.8
   timeout: 30
   environment:
     PYTHONPATH: "/opt/python:/opt/python/lib/${self:provider.runtime}/site-packages:src"
+    ENVIRONMENT: ${param:ENVIRONMENT}
+    DATASOURCE_HOST: ${param:DATASOURCE_HOST}
+    DATASOURCE_API_KEY: ${param:DATASOURCE_API_KEY}
+    DB_CONN: postgresql://${param:DB_USERNAME}:${param:DB_PASSWORD}@${param:DB_HOST}/${param:DB_NAME}
+    FLASK_APP: ${param:FLASK_APP}
 
 custom:
   dotenv:
@@ -19,13 +30,14 @@ custom:
     slim: false
     useStaticCache: false
   wsgi:
-    app: src.app.app
+    app: ${param:FLASK_APP}.app
 
 plugins:
   - serverless-dotenv-plugin
   - serverless-python-requirements
   - serverless-wsgi
   - serverless-offline
+  - serverless-plugin-scripts
 
 package:
   individually: false
