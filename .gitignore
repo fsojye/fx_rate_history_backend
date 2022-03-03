@@ -411,3 +411,5 @@ dist
 # Reference https://en.wikipedia.org/wiki/Metasyntactic_variable
 
 # End of https://www.toptal.com/developers/gitignore/api/test,node,flask,python,serverless,macos
+
+serverless.yml
