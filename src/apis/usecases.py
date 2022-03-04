@@ -45,7 +45,8 @@ def fetch_and_store_data():
 
 
 def _get_last_date_from_db() -> date:
-    return DateEntity.query_last().date
+    query = DateEntity.query_last()
+    return query.date if query else None
 
 
 def _get_next_date(current_date: date) -> date:

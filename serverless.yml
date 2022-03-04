@@ -16,11 +16,6 @@ provider:
   timeout: 30
   environment:
     PYTHONPATH: "/opt/python:/opt/python/lib/${self:provider.runtime}/site-packages:src"
-    ENVIRONMENT: ${param:ENVIRONMENT}
-    DATASOURCE_HOST: ${param:DATASOURCE_HOST}
-    DATASOURCE_API_KEY: ${param:DATASOURCE_API_KEY}
-    DB_CONN: postgresql://${param:DB_USERNAME}:${param:DB_PASSWORD}@${param:DB_HOST}/${param:DB_NAME}
-    FLASK_APP: ${param:FLASK_APP}
 
 custom:
   dotenv:
@@ -38,6 +33,10 @@ custom:
       flask-db-rev: python -m pipenv run flask db migrate
       flask-db-up: python -m pipenv run flask db upgrade head
       run-unit-tests: python -m pipenv run pytest
+      generate-env: sh utilities/generate_env.sh
+    hooks:
+      'before:deploy:deploy': npx sls flask-db-up
+
 
 plugins:
   - serverless-dotenv-plugin
@@ -61,5 +60,5 @@ functions:
     layers:
       - { Ref: PythonRequirementsLambdaLayer }
     events:
-      - schedule: rate(1 hour)
+      - schedule: rate(1 minute)
 

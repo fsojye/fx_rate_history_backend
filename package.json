@@ -9,5 +9,10 @@
     "serverless-plugin-scripts": "^1.0.2",
     "serverless-python-requirements": "^5.1.0",
     "serverless-wsgi": "^3.0.0"
+  },
+  "scripts": {
+    "install": "sh ./utilities/install_dependencies.sh",
+    "test": "npx sls run-unit-tests",
+    "posttest": "npx sls generate-env"
   }
 }

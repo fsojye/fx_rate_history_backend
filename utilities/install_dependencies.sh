@@ -1,8 +1,8 @@
 #!/bin/sh
 
 printf "\e[33m%b\e[0m\n" "Installing nodejs dependencies"
-if [ -f yarn.lock ]; then
-  yarn install --frozen-lockfile
+if [ -f package-lock.json ]; then
+  npm install --from-lock-file
 else
   yarn install
 fi

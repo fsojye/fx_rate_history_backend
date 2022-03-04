@@ -20,6 +20,11 @@ def test_get_last_date_from_db_should_return_last_element_date_field():
     assert actual == expected
 
 
+def test_get_last_date_from_db_given_table_empty_should_return_none():
+    actual = _get_last_date_from_db()
+    assert actual == None
+
+
 @pytest.mark.parametrize('date, expected', [
     # seed date should start with 1999-01-01
     (None, date(1999, 1, 1)),

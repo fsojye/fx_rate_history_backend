@@ -1,4 +1,3 @@
-
 import serverless_wsgi
 
 from apis.controllers import DataCollectorController
