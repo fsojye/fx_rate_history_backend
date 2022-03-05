@@ -16,7 +16,7 @@ def main():
                 ssm_key = v.split('sls://', 1)
                 if len(ssm_key) == 2:
                     v = client.get_parameter(ssm_key[-1])
-                config_file.write(f'{k} = {v}')
+                config_file.write(f'{k} = {v}\n')
 
 
 class SecretsClient:
@@ -29,7 +29,7 @@ class SecretsClient:
 
     def get_parameter(self, key):
         logging.info(f"Retrieving [{key}] value from sls")
-        return self._client(key).stdout.decode()
+        return self._client(key).stdout.decode().strip()
 
 
 if __name__ == "__main__":
