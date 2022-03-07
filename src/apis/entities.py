@@ -1,6 +1,6 @@
 from datetime import date as d
 
-from app import db
+from app_context import db
 from common.constants import DateStatusEnum
 from common.logger import logging
 from models import Currency, Date, DateCurrencyRate
@@ -8,6 +8,14 @@ from models import Currency, Date, DateCurrencyRate
 
 class BaseEntity:
     _loaded_object = None
+
+    def read(self):
+        filters = []
+        for key, value in self.__dict__.items():
+            if value != None:
+                key = key[1:] if key.startswith('_') else key
+                filters.append(getattr(self._model, key) == value)
+        return self.query.filter(db.and_(*filters)).one()
 
     def insert(self):
         self._load_object()

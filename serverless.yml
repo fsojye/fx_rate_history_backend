@@ -34,16 +34,16 @@ custom:
       flask-db-up: python -m pipenv run flask db upgrade head
       run-unit-tests: python -m pipenv run pytest
       generate-env: sh utilities/generate_env.sh
-    # hooks:
-    #   'before:deploy:deploy': npx sls flask-db-up
+    hooks:
+      'before:deploy:deploy': npx sls flask-db-up
 
 
 plugins:
   - serverless-dotenv-plugin
   - serverless-python-requirements
   - serverless-wsgi
-  - serverless-offline
   - serverless-plugin-scripts
+  - serverless-offline
 
 package:
   individually: false
@@ -61,4 +61,7 @@ functions:
       - { Ref: PythonRequirementsLambdaLayer }
     events:
       - schedule: rate(1 day)
-
+  dateApi:
+    handler: src.lambda_handler.handler
+    events:
+      - http: GET /rates

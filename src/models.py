@@ -12,6 +12,7 @@ class Date(db.Model):
     uuid = db.Column(UUIDType(binary=False), default=uuid4, primary_key=True)
     date = db.Column(db.Date, unique=True, nullable=False)
     status = db.Column(db.Integer, default=DateStatusEnum.PENDING.value, nullable=False)
+    rates = db.relationship("DateCurrencyRate", backref="date", lazy="dynamic")
 
 
 class Currency(db.Model):
@@ -19,6 +20,7 @@ class Currency(db.Model):
 
     uuid = db.Column(UUIDType(binary=False), default=uuid4, primary_key=True)
     code = db.Column(db.String(32), unique=True, nullable=False)
+    rates = db.relationship("DateCurrencyRate", backref="currency", lazy="dynamic")
 
 
 class DateCurrencyRate(db.Model):
@@ -30,5 +32,3 @@ class DateCurrencyRate(db.Model):
     amount = db.Column(db.Float, nullable=False)
     epoch = db.Column(db.String(32), nullable=False)
     base_ccy = db.Column(db.String(32), nullable=False)
-    date = db.relationship("Date", backref=db.backref("date_currency_rate"))
-    currency = db.relationship("Currency", backref=db.backref("date_currency_rate"))

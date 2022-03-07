@@ -15,7 +15,7 @@ def fetch_and_store_data():
     """Main interactor method for fetching data from third party API and storing fetched data to database.
 
     Lookup the last date element;
-    Create date object with status = PENDING;
+    Create next date object with status = PENDING;
     Send request to API for next date data;
     Validates and insert data to database;
     Update date object with status = SUCCESS or FAILED
