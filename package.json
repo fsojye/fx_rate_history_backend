@@ -14,8 +14,5 @@
     "install": "sh ./utilities/install_dependencies.sh",
     "test": "npx sls run-unit-tests",
     "posttest": "npx sls generate-env"
-  },
-  "dependencies": {
-    "wscat": "^5.1.0"
   }
 }

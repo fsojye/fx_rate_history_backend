@@ -1,6 +1,7 @@
-import app  # Replace with your actual application
 import serverless_wsgi
+
 from apis.controllers import DataCollectorController
+from app import app  # Replace with your actual application
 
 # If you need to send additional content types as text, add then directly
 # to the whitelist:
