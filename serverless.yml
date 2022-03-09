@@ -34,6 +34,7 @@ custom:
       flask-db-up: python -m pipenv run flask db upgrade head
       run-unit-tests: python -m pipenv run pytest
       generate-env: sh utilities/generate_env.sh
+      generate-doc: sh utilities/generate_swagger.sh
     hooks:
       'before:deploy:deploy': npx sls flask-db-up
 

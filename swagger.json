@@ -1,0 +1,70 @@
+{
+  "swagger": "2.0",
+  "basePath": "/",
+  "paths": {
+    "/rates": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        },
+        "operationId": "get_rates_controller",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "symbols",
+            "in": "query",
+            "type": "array",
+            "required": true,
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "rates"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "API",
+    "version": "1.0"
+  },
+  "produces": [
+    "application/json"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "tags": [
+    {
+      "name": "rates"
+    }
+  ],
+  "responses": {
+    "ParseError": {
+      "description": "When a mask can't be parsed"
+    },
+    "MaskError": {
+      "description": "When any error occurs on mask"
+    }
+  }
+}
