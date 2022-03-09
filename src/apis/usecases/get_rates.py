@@ -50,12 +50,13 @@ def _get_currency_from_db(symbols: list) -> list:
 def _filter_currency_rates_by_date(currency, start: date, end: date, granularity: str) -> dict:
     filters = [Date.date >= start, Date.date <= end]
     currency_rates = currency.rates.join(Date).filter(*filters)
+    _year = db.func.extract('year', Date.date)
     if granularity == 'year' and start != end:
-        _year = db.func.extract('year', Date.date)
         return {
-            int(rate[0]): rate[1] for rate in currency_rates.with_entities(_year, db.func.avg(DateCurrencyRate.amount)).group_by(_year).all()
+            int(rate[0]): rate[1] for rate in currency_rates.with_entities(_year, db.func.avg(DateCurrencyRate.amount)).group_by(_year).order_by(_year).all()
         }
     else:
+        _month = db.func.extract('month', Date.date)
         return {
-            str(rate.date.date): rate.amount for rate in currency_rates.all()
+            f'{int(rate[0])}-{int(rate[1])}': rate[2] for rate in currency_rates.with_entities(_year, _month, db.func.avg(DateCurrencyRate.amount)).group_by(_year, _month).order_by(_year, _month).all()
         }
